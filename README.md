@@ -1,5 +1,7 @@
 # Codex Usage Tray
 
+![Codex Usage Tray showing 55% of the weekly allowance remaining](codex-usage-tray.png)
+
 A small Windows tray utility that displays the percentage of your Codex weekly allowance remaining.
 
 The tray shows only the number. For example, `56` means **56% of the 7-day allowance remains**. Left-click the number for detailed 5-hour and weekly usage, reset countdowns, refresh status, and errors.
