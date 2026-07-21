@@ -16,6 +16,8 @@ The tray shows only the number. For example, `56` means **56% of the 7-day allow
 - No API key, access token, or ChatGPT password stored by this application.
 - No third-party application dependencies or NuGet packages.
 
+![Codex Usage Tray popup showing weekly allowance details](codex-usage-popup.png)
+
 ## Requirements
 
 - Windows 10 or Windows 11, x64.
