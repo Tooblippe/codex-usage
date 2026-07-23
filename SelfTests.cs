@@ -135,9 +135,20 @@ internal static class SelfTests
     private static void TestWeeklyLeft(DateTimeOffset now)
     {
         LimitReading reading = new(LimitState.Available, 55, now.AddDays(5).AddHours(11));
+        double? left = UsagePopup.CalculateWeeklyLeft(reading, now);
+        Check(left is < 0, "Weekly allowance left was not negative.");
         Check(
             UsagePopup.FormatWeeklyLeft(reading, now) == "Left: -16.4%",
             "Weekly allowance left was incorrect.");
+        Check(
+            TrayIconRenderer.ResolveTextColor(left) == Color.Red,
+            "Negative weekly allowance left did not produce red tray text.");
+        Check(
+            TrayIconRenderer.ResolveTextColor(0) == Color.LimeGreen,
+            "Non-negative weekly allowance left did not produce green tray text.");
+        Check(
+            TrayIconRenderer.ResolveTextColor(null) == Color.Gray,
+            "Unavailable weekly allowance left did not produce gray tray text.");
         Check(
             UsagePopup.FormatWeeklyLeft(reading with { RemainingPercent = null }, now)
                 == "Left unavailable",

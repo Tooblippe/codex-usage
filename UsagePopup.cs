@@ -249,14 +249,27 @@ internal sealed class UsagePopup : Form
     /// <returns>The allowance left before reaching the target.</returns>
     internal static string FormatWeeklyLeft(LimitReading reading, DateTimeOffset now)
     {
+        double? left = CalculateWeeklyLeft(reading, now);
+        return left is double value
+            ? FormattableString.Invariant($"Left: {value:F1}%")
+            : "Left unavailable";
+    }
+
+    /// <summary>
+    /// Calculates the numeric weekly allowance remaining above the next whole-day target.
+    /// </summary>
+    /// <param name="reading">The normalized weekly limit reading.</param>
+    /// <param name="now">The timestamp used for the calculation.</param>
+    /// <returns>The percentage left, or null when required data is unavailable.</returns>
+    internal static double? CalculateWeeklyLeft(LimitReading reading, DateTimeOffset now)
+    {
         if (reading.RemainingPercent is not int remainingPercent
             || !TryGetWeeklyDayBoundary(reading, now, out double targetPercent, out _))
         {
-            return "Left unavailable";
+            return null;
         }
 
-        double left = Math.Clamp(remainingPercent, 0, 100) - targetPercent;
-        return FormattableString.Invariant($"Left: {left:F1}%");
+        return Math.Clamp(remainingPercent, 0, 100) - targetPercent;
     }
 
     /// <summary>

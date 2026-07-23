@@ -136,7 +136,8 @@ internal sealed class TrayApplicationContext : ApplicationContext
     /// <param name="snapshot">The normalized snapshot to display.</param>
     private void ApplySnapshot(UsageSnapshot snapshot)
     {
-        Icon weekly = TrayIconRenderer.Render(snapshot.Weekly);
+        double? weeklyLeft = UsagePopup.CalculateWeeklyLeft(snapshot.Weekly, DateTimeOffset.Now);
+        Icon weekly = TrayIconRenderer.Render(snapshot.Weekly, weeklyLeft);
         Icon? oldWeekly = _weeklyRenderedIcon;
         _weeklyRenderedIcon = weekly;
         _weeklyIcon.Icon = weekly;

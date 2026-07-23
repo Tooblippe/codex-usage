@@ -8,7 +8,7 @@ The tray shows only the number. For example, `56` means **56% of the 7-day allow
 
 ## Features
 
-- One readable, background-free tray number for weekly Codex usage remaining.
+- One readable, background-free tray number: green while `Left` is non-negative, red when it is negative, and gray when unavailable.
 - Detailed popup with 5-hour and weekly progress bars.
 - Automatic refresh every minute and manual refresh from the tray menu.
 - Warning notification once per reset cycle when either allowance reaches 20% remaining.

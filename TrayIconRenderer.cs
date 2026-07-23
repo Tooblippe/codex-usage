@@ -10,12 +10,14 @@ internal static class TrayIconRenderer
     /// Renders a numeric tray icon for one rate-limit window.
     /// </summary>
     /// <param name="reading">The normalized limit reading.</param>
+    /// <param name="left">The weekly allowance remaining above the current pacing target.</param>
     /// <returns>An independently owned Windows icon.</returns>
-    internal static Icon Render(LimitReading reading)
+    internal static Icon Render(LimitReading reading, double? left)
     {
         string text = reading.State == LimitState.Available && reading.RemainingPercent is int remaining
             ? Math.Clamp(remaining, 0, 100).ToString()
             : "--";
+        Color textColor = ResolveTextColor(left);
 
         using Bitmap bitmap = new(IconSize, IconSize);
         using Graphics graphics = Graphics.FromImage(bitmap);
@@ -37,7 +39,7 @@ internal static class TrayIconRenderer
             text,
             font,
             new Rectangle(0, 0, IconSize, IconSize),
-            Color.White,
+            textColor,
             flags);
 
         IntPtr handle = bitmap.GetHicon();
@@ -51,6 +53,18 @@ internal static class TrayIconRenderer
             DestroyIcon(handle);
         }
     }
+
+    /// <summary>
+    /// Selects the tray text colour from the weekly pacing balance.
+    /// </summary>
+    /// <param name="left">The percentage remaining above the pacing target.</param>
+    /// <returns>Red below target, green on target, or gray when unavailable.</returns>
+    internal static Color ResolveTextColor(double? left) =>
+        left is null
+            ? Color.Gray
+            : left < 0
+                ? Color.Red
+                : Color.LimeGreen;
 
     /// <summary>
     /// Releases a native icon handle created from a bitmap.
