@@ -7,6 +7,9 @@ internal sealed class UsagePopup : Form
     private readonly Label _fiveHourReset = new();
     private readonly Label _weeklyValue = new();
     private readonly ProgressBar _weeklyProgress = new();
+    private readonly Label _weeklyDailyRates = new();
+    private readonly Label _weeklyEndOfDay = new();
+    private readonly Label _weeklyLeft = new();
     private readonly Label _weeklyReset = new();
     private readonly Label _status = new();
     private readonly Label _error = new();
@@ -20,7 +23,7 @@ internal sealed class UsagePopup : Form
     internal UsagePopup()
     {
         Text = "Codex usage";
-        ClientSize = new Size(360, 238);
+        ClientSize = new Size(360, 295);
         FormBorderStyle = FormBorderStyle.FixedToolWindow;
         MaximizeBox = false;
         MinimizeBox = false;
@@ -40,11 +43,14 @@ internal sealed class UsagePopup : Form
         ConfigureResetLabel(_fiveHourReset, 91);
         ConfigureValueLabel(_weeklyValue, "Weekly", 121);
         ConfigureProgress(_weeklyProgress, 141);
-        ConfigureResetLabel(_weeklyReset, 167);
+        ConfigureResetLabel(_weeklyDailyRates, 167);
+        ConfigureResetLabel(_weeklyEndOfDay, 186);
+        ConfigureResetLabel(_weeklyLeft, 205);
+        ConfigureResetLabel(_weeklyReset, 224);
 
-        _status.SetBounds(12, 195, 336, 18);
+        _status.SetBounds(12, 252, 336, 18);
         _status.ForeColor = SystemColors.GrayText;
-        _error.SetBounds(12, 214, 336, 20);
+        _error.SetBounds(12, 271, 336, 20);
         _error.AutoEllipsis = true;
         _error.ForeColor = Color.Firebrick;
 
@@ -55,6 +61,9 @@ internal sealed class UsagePopup : Form
             _fiveHourReset,
             _weeklyValue,
             _weeklyProgress,
+            _weeklyDailyRates,
+            _weeklyEndOfDay,
+            _weeklyLeft,
             _weeklyReset,
             _status,
             _error,
@@ -160,6 +169,9 @@ internal sealed class UsagePopup : Form
     {
         RenderLimit(_fiveHourValue, _fiveHourProgress, _fiveHourReset, "5-hour", _snapshot.FiveHour);
         RenderLimit(_weeklyValue, _weeklyProgress, _weeklyReset, "Weekly", _snapshot.Weekly);
+        _weeklyDailyRates.Text = FormatWeeklyDailyRates(_snapshot.Weekly, DateTimeOffset.Now);
+        _weeklyEndOfDay.Text = FormatWeeklyEndOfDayTarget(_snapshot.Weekly, DateTimeOffset.Now);
+        _weeklyLeft.Text = FormatWeeklyLeft(_snapshot.Weekly, DateTimeOffset.Now);
         _status.Text = _refreshing
             ? "Refreshing…"
             : _snapshot.ErrorMessage is not null
@@ -167,6 +179,115 @@ internal sealed class UsagePopup : Form
                 : $"Updated {_snapshot.RefreshedAt.ToLocalTime():HH:mm:ss}";
         _error.Text = _snapshot.ErrorMessage ?? string.Empty;
         _error.Visible = !string.IsNullOrWhiteSpace(_snapshot.ErrorMessage);
+    }
+
+    /// <summary>
+    /// Calculates average weekly usage per elapsed day and remaining allowance per remaining day.
+    /// </summary>
+    /// <param name="reading">The normalized weekly limit reading.</param>
+    /// <param name="now">The timestamp used for the calculation.</param>
+    /// <returns>A short per-day usage description.</returns>
+    internal static string FormatWeeklyDailyRates(LimitReading reading, DateTimeOffset now)
+    {
+        if (reading.State != LimitState.Available
+            || reading.RemainingPercent is not int remainingPercent
+            || reading.ResetsAt is not DateTimeOffset resetsAt)
+        {
+            return "Per-day rates unavailable";
+        }
+
+        double windowDays = TimeSpan.FromMinutes(CodexRateLimitReader.WeeklyMinutes).TotalDays;
+        double daysLeft = Math.Clamp((resetsAt - now).TotalDays, 0, windowDays);
+        double daysElapsed = windowDays - daysLeft;
+        if (daysElapsed <= 0 || daysLeft <= 0)
+        {
+            return "Per-day rates unavailable";
+        }
+
+        double remaining = Math.Clamp(remainingPercent, 0, 100);
+        double usedPerDay = (100 - remaining) / daysElapsed;
+        double leftPerDay = remaining / daysLeft;
+        return FormattableString.Invariant(
+            $"Per day: {usedPerDay:F1}% used · {leftPerDay:F1}% left");
+    }
+
+    /// <summary>
+    /// Calculates the allowance target at the next whole-day weekly reset boundary.
+    /// </summary>
+    /// <param name="reading">The normalized weekly limit reading.</param>
+    /// <param name="now">The timestamp used for the calculation.</param>
+    /// <returns>A short target and countdown description.</returns>
+    internal static string FormatWeeklyEndOfDayTarget(LimitReading reading, DateTimeOffset now)
+    {
+        if (!TryGetWeeklyDayBoundary(
+                reading,
+                now,
+                out double targetPercent,
+                out int minutesUntilBoundary))
+        {
+            return "End of day target unavailable";
+        }
+
+        int hoursUntilBoundary = minutesUntilBoundary / 60;
+        int remainingMinutes = minutesUntilBoundary % 60;
+        string when = minutesUntilBoundary <= 0
+            ? "now"
+            : hoursUntilBoundary > 0
+                ? remainingMinutes > 0
+                    ? $"in {hoursUntilBoundary}h {remainingMinutes}m"
+                    : $"in {hoursUntilBoundary}h"
+                : $"in {minutesUntilBoundary}m";
+        return FormattableString.Invariant(
+            $"End of day: {targetPercent:F1}% left {when}");
+    }
+
+    /// <summary>
+    /// Calculates the current weekly allowance remaining above the next whole-day target.
+    /// </summary>
+    /// <param name="reading">The normalized weekly limit reading.</param>
+    /// <param name="now">The timestamp used for the calculation.</param>
+    /// <returns>The allowance left before reaching the target.</returns>
+    internal static string FormatWeeklyLeft(LimitReading reading, DateTimeOffset now)
+    {
+        if (reading.RemainingPercent is not int remainingPercent
+            || !TryGetWeeklyDayBoundary(reading, now, out double targetPercent, out _))
+        {
+            return "Left unavailable";
+        }
+
+        double left = Math.Clamp(remainingPercent, 0, 100) - targetPercent;
+        return FormattableString.Invariant($"Left: {left:F1}%");
+    }
+
+    /// <summary>
+    /// Gets the target and delay for the next whole-day weekly reset boundary.
+    /// </summary>
+    /// <param name="reading">The normalized weekly limit reading.</param>
+    /// <param name="now">The timestamp used for the calculation.</param>
+    /// <param name="targetPercent">The percentage that should remain at the boundary.</param>
+    /// <param name="minutesUntilBoundary">The rounded-up minutes until the boundary.</param>
+    /// <returns>True when the weekly reset timing is available.</returns>
+    private static bool TryGetWeeklyDayBoundary(
+        LimitReading reading,
+        DateTimeOffset now,
+        out double targetPercent,
+        out int minutesUntilBoundary)
+    {
+        targetPercent = 0;
+        minutesUntilBoundary = 0;
+        if (reading.State != LimitState.Available
+            || reading.ResetsAt is not DateTimeOffset resetsAt)
+        {
+            return false;
+        }
+
+        double windowDays = TimeSpan.FromMinutes(CodexRateLimitReader.WeeklyMinutes).TotalDays;
+        double daysLeft = Math.Clamp((resetsAt - now).TotalDays, 0, windowDays);
+        int wholeDaysLeft = (int)Math.Floor(daysLeft);
+        targetPercent = 100d * wholeDaysLeft / windowDays;
+        minutesUntilBoundary = (int)Math.Ceiling(
+            TimeSpan.FromDays(daysLeft - wholeDaysLeft).TotalMinutes);
+        return true;
     }
 
     /// <summary>

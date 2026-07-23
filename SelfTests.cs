@@ -56,6 +56,9 @@ internal static class SelfTests
                     """{"id":2,"error":{"message":"denied"}}"""),
                 "Protocol error was accepted.");
 
+            TestWeeklyDailyRates(now);
+            TestWeeklyEndOfDayTarget(now);
+            TestWeeklyLeft(now);
             TestPopupReopen();
 
             using (CancellationTokenSource timeout = new(TimeSpan.FromMilliseconds(20)))
@@ -85,6 +88,60 @@ internal static class SelfTests
             Console.Error.WriteLine($"Self-test failed: {exception.Message}");
             return 1;
         }
+    }
+
+    /// <summary>
+    /// Verifies weekly per-day rates and unavailable reset handling.
+    /// </summary>
+    /// <param name="now">The timestamp used for deterministic rate calculations.</param>
+    private static void TestWeeklyDailyRates(DateTimeOffset now)
+    {
+        LimitReading reading = new(LimitState.Available, 55, now.AddDays(4));
+        Check(
+            UsagePopup.FormatWeeklyDailyRates(reading, now)
+                == "Per day: 15.0% used · 13.8% left",
+            "Weekly per-day rates were incorrect.");
+        Check(
+            UsagePopup.FormatWeeklyDailyRates(reading with { ResetsAt = null }, now)
+                == "Per-day rates unavailable",
+            "Missing weekly reset time did not make per-day rates unavailable.");
+    }
+
+    /// <summary>
+    /// Verifies the allowance target at the next whole-day weekly boundary.
+    /// </summary>
+    /// <param name="now">The timestamp used for deterministic target calculations.</param>
+    private static void TestWeeklyEndOfDayTarget(DateTimeOffset now)
+    {
+        LimitReading reading = new(LimitState.Available, 55, now.AddDays(5).AddHours(11));
+        Check(
+            UsagePopup.FormatWeeklyEndOfDayTarget(reading, now)
+                == "End of day: 71.4% left in 11h",
+            "Weekly end-of-day target was incorrect.");
+        Check(
+            UsagePopup.FormatWeeklyEndOfDayTarget(reading with { ResetsAt = now.AddDays(5) }, now)
+                == "End of day: 71.4% left now",
+            "Whole-day weekly target was not due now.");
+        Check(
+            UsagePopup.FormatWeeklyEndOfDayTarget(reading with { ResetsAt = null }, now)
+                == "End of day target unavailable",
+            "Missing weekly reset time did not make the end-of-day target unavailable.");
+    }
+
+    /// <summary>
+    /// Verifies the weekly allowance remaining above the next whole-day target.
+    /// </summary>
+    /// <param name="now">The timestamp used for deterministic target calculations.</param>
+    private static void TestWeeklyLeft(DateTimeOffset now)
+    {
+        LimitReading reading = new(LimitState.Available, 55, now.AddDays(5).AddHours(11));
+        Check(
+            UsagePopup.FormatWeeklyLeft(reading, now) == "Left: -16.4%",
+            "Weekly allowance left was incorrect.");
+        Check(
+            UsagePopup.FormatWeeklyLeft(reading with { RemainingPercent = null }, now)
+                == "Left unavailable",
+            "Missing weekly percentage did not make allowance left unavailable.");
     }
 
     /// <summary>

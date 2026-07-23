@@ -105,7 +105,7 @@ The `.pdb` file is useful for debugging but is not required to run the applicati
 
 ## Run tests
 
-The package-free self-test covers response parsing, window classification, percentage clamping, malformed responses, timeouts, alert persistence, startup registration, single-instance behavior, popup reuse, and one live Codex usage read:
+The package-free self-test covers response parsing, window classification, percentage clamping, weekly pacing calculations, malformed responses, timeouts, alert persistence, startup registration, single-instance behavior, popup reuse, and one live Codex usage read:
 
 ```powershell
 dotnet run --configuration Release --no-build -- --self-test
@@ -155,6 +155,10 @@ The popup shows both recognized windows:
 - `300` minutes is treated as the 5-hour window.
 - `10080` minutes is treated as the 7-day window.
 - Remaining percentage is calculated as `100 - usedPercent` and clamped to `0..100`.
+- **Per day used** is consumed percentage divided by elapsed fractional days.
+- **Per day left** is remaining percentage divided by fractional days until reset.
+- **End of day** is the target at the next whole-day boundary: `(whole days left / 7) × 100`. For example, with 5 days 11 hours until reset, the target in 11 hours is `71.4%`.
+- **Left** is the current remaining percentage minus the end-of-day target. A negative value means usage is already past that target.
 
 OpenAI may omit a window for a particular plan or at a particular time. When that happens, the popup displays `N/A`; the app never substitutes an old session value. The tray number represents only the weekly window and displays `--` when current weekly data is unavailable.
 
